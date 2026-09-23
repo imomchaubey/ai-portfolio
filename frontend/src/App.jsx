@@ -28,7 +28,7 @@ function App() {
     setMessages(prev => [...prev, { role: 'ai', text: '' }]);
 
     try {
-      const response = await fetch('http://localhost:8000/chat', {
+      const response = await fetch('https://ai-portfolio-2bok.onrender.com/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMsg })
