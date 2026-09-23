@@ -1,0 +1,63 @@
+{
+    "name": "Om Prakash Chaubey",
+    "contact": {
+        "email": "om.chaubey65@gmail.com",
+        "phone": "+91 9234474323"
+    },
+    "links": {
+        "linkedin": "linkedin.com/in/ochaubey",
+        "github": "github.com/imomchaubey"
+    },
+    "education": "B.Tech in Computer Science and Engineering, Thapar Institute of Engineering & Technology (Expected May 2027) - CGPA: 7.18/10.0",
+    "roll_number": "102317189",
+    "skills": [
+        "Python",
+        "C++",
+        "SQL",
+        "R",
+        "JavaScript",
+        "C",
+        "XGBoost",
+        "TensorFlow",
+        "PyTorch",
+        "Keras",
+        "Scikit-learn",
+        "Pandas",
+        "NumPy",
+        "Matplotlib",
+        "Seaborn",
+        "Streamlit",
+        "Git",
+        "Docker",
+        "Flask",
+        "PuLP"
+    ],
+    "projects": [
+        {
+            "name": "Anomaly Detection in Network Traffic",
+            "description": "Engineered a hybrid classification model integrating Isolation Forest decision functions with a Random Forest classifier, utilizing SMOTE oversampling. Achieved 95% Accuracy and 1.00 Precision on the UNSW-NB15 dataset.",
+            "github_link": "Available on GitHub"
+        },
+        {
+            "name": "E-Commerce Data Analysis & Prediction Dashboard",
+            "description": "Trained an XGBoost model for predictive analytics with 90% accuracy and built a Streamlit dashboard to visualize KPIs like Average Order Value and delivery delays.",
+            "github_link": "Available on GitHub"
+        },
+        {
+            "name": "Emotion Recognition with Deep Learning",
+            "description": "Developed a convolutional model achieving 85.75% accuracy using data augmentation strategies like noise addition and pitch shifting.",
+            "github_link": "Available on GitHub"
+        },
+        {
+            "name": "TOPSIS Ranking Framework for NLP Models",
+            "description": "Implemented the TOPSIS algorithm in Python to evaluate and rank pre-trained NLP models (BERT, RoBERTa, DistilBERT) using NumPy and Pandas.",
+            "github_link": "Available on GitHub"
+        }
+    ],
+    "certifications": [
+        "Google AI Specialization (Coursera)",
+        "NVIDIA: Fundamentals of Deep Learning",
+        "Deep Learning with PyTorch",
+        "Generative AI & Machine Learning with PySpark"
+    ]
+}
