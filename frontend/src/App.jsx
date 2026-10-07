@@ -1,123 +1,319 @@
-import { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import './App.css';
+
+const API_URL = import.meta.env.VITE_API_URL
+  ?? (import.meta.env.DEV ? 'http://localhost:8000' : 'https://ai-portfolio-2bok.onrender.com');
+
+const PROMPT = 'guest@om-portfolio:~$';
+const SESSION_ID = Math.random().toString(36).slice(2);
+
+const PROJECTS = [
+  {
+    file: 'de_insure.json',
+    data: {
+      name: 'De-Insure',
+      type: 'IoT system',
+      hardware: ['ESP32', 'DHT22'],
+      telemetry: ['temperature', 'humidity'],
+    },
+    query: 'Explain the De-Insure IoT system with ESP32 and DHT22 telemetry.',
+  },
+  {
+    file: 'brainova.json',
+    data: {
+      name: 'Brainova',
+      type: 'platform',
+      owner: 'Om Prakash Chaubey',
+    },
+    query: 'Tell me about the Brainova platform.',
+  },
+  {
+    file: 'topsis_pypi.json',
+    data: {
+      name: 'topsis',
+      type: 'PyPI package',
+      language: 'Python',
+      algorithm: 'TOPSIS',
+      libs: ['NumPy', 'Pandas'],
+    },
+    query: 'Tell me about the TOPSIS PyPI package.',
+  },
+  {
+    file: 'anomaly_detection.json',
+    data: {
+      name: 'Anomaly Detection in Network Traffic',
+      dataset: 'UNSW-NB15',
+      model: ['IsolationForest', 'RandomForest'],
+      imbalance: 'SMOTE',
+      accuracy: 0.95,
+      precision: 1.0,
+    },
+    query: 'Go deep on the anomaly detection model: the 95% accuracy and SMOTE oversampling.',
+  },
+];
+
+/* ---------- JSON syntax highlighter ---------- */
+function JsonValue({ value, indent = 1 }) {
+  const pad = '  '.repeat(indent);
+  const padEnd = '  '.repeat(indent - 1);
+
+  if (Array.isArray(value)) {
+    return (
+      <>
+        <span className="tok-punc">[</span>
+        {value.map((v, i) => (
+          <span key={i}>
+            <JsonValue value={v} indent={indent + 1} />
+            {i < value.length - 1 && <span className="tok-punc">, </span>}
+          </span>
+        ))}
+        <span className="tok-punc">]</span>
+      </>
+    );
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value);
+    return (
+      <>
+        <span className="tok-punc">{'{'}</span>
+        {'\n'}
+        {entries.map(([k, v], i) => (
+          <span key={k}>
+            {pad}
+            <span className="tok-key">"{k}"</span>
+            <span className="tok-punc">: </span>
+            <JsonValue value={v} indent={indent + 1} />
+            {i < entries.length - 1 && <span className="tok-punc">,</span>}
+            {'\n'}
+          </span>
+        ))}
+        {padEnd}
+        <span className="tok-punc">{'}'}</span>
+      </>
+    );
+  }
+  if (typeof value === 'number') return <span className="tok-num">{value}</span>;
+  if (typeof value === 'boolean') return <span className="tok-bool">{String(value)}</span>;
+  return <span className="tok-str">"{value}"</span>;
+}
+
+function ProjectBlock({ project, active, onSelect }) {
+  return (
+    <motion.button
+      type="button"
+      className={`file-block ${active ? 'active' : ''}`}
+      onClick={() => onSelect(project)}
+      whileHover={{ x: 4 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <div className="file-tab">
+        <span className="file-icon">{'{}'}</span> {project.file}
+      </div>
+      <pre className="file-code">
+        <JsonValue value={project.data} />
+      </pre>
+    </motion.button>
+  );
+}
+
+/* ---------- Typewriter message ---------- */
+function TypewriterText({ tokens, streaming }) {
+  return (
+    <span className="ai-text">
+      {tokens.map((t, i) => (
+        <motion.span
+          key={i}
+          initial={{ opacity: 0, y: 2 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.12 }}
+        >
+          {t}
+        </motion.span>
+      ))}
+      {streaming && <span className="cursor">▋</span>}
+    </span>
+  );
+}
 
 function App() {
   const [messages, setMessages] = useState([
-    { role: 'ai', text: "Hi! I'm the AI portfolio assistant for Om Prakash Chaubey. What would you like to know about his skills, projects, or experience?" }
+    {
+      role: 'ai',
+      tokens: [
+        "Welcome to om-portfolio v1.0. Ask about skills, projects or experience — or click a file in the explorer.",
+      ],
+    },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const [activeFile, setActiveFile] = useState(null);
+  const endRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    scrollToBottom();
+    endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = async (e) => {
-    e?.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const updateLast = (fn) =>
+    setMessages((prev) => {
+      const copy = [...prev];
+      copy[copy.length - 1] = fn(copy[copy.length - 1]);
+      return copy;
+    });
 
-    const userMsg = input.trim();
+  const sendMessage = async (text) => {
+    const userMsg = (text ?? input).trim();
+    if (!userMsg || isLoading) return;
+
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setIsLoading(true);
-    setMessages(prev => [...prev, { role: 'ai', text: '' }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', text: userMsg },
+      { role: 'ai', tokens: [], streaming: true },
+    ]);
+
+    const handleEvent = (event, payload) => {
+      if (event === 'token') {
+        updateLast((m) => ({ ...m, tokens: [...m.tokens, payload.token] }));
+      } else if (event === 'error') {
+        updateLast((m) => ({ ...m, error: payload.message }));
+      }
+    };
 
     try {
-      const response = await fetch('https://ai-portfolio-2bok.onrender.com/chat', {
+      const response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg })
+        body: JSON.stringify({ message: userMsg, session_id: SESSION_ID }),
       });
-
-      if (!response.ok) throw new Error("Network response was not ok");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const word = line.replace('data: ', '');
-            setMessages(prev => {
-              const newMessages = [...prev];
-              const lastIndex = newMessages.length - 1;
-
-              newMessages[lastIndex] = {
-                ...newMessages[lastIndex],
-                text: newMessages[lastIndex].text + word
-              };
-
-              return newMessages;
-            });
+        const frames = buffer.split('\n\n');
+        buffer = frames.pop();
+        for (const frame of frames) {
+          let event = 'message';
+          let data = '';
+          for (const line of frame.split('\n')) {
+            if (line.startsWith('event: ')) event = line.slice(7);
+            else if (line.startsWith('data: ')) data += line.slice(6);
+          }
+          if (data) {
+            try {
+              handleEvent(event, JSON.parse(data));
+            } catch {
+              /* ignore malformed frame */
+            }
           }
         }
       }
-    } catch (error) {
-      console.error("Error fetching chat:", error);
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 1].text = "Error connecting to backend. Is FastAPI running?";
-        return newMessages;
-      });
+    } catch (err) {
+      const msg = err instanceof TypeError
+        ? '[ERROR] Connection refused: backend unreachable'
+        : `[ERROR] ${err.message}`;
+      updateLast((m) => ({ ...m, error: msg }));
     } finally {
+      updateLast((m) => ({ ...m, streaming: false }));
       setIsLoading(false);
+      inputRef.current?.focus();
     }
   };
 
+  const onSelectProject = (project) => {
+    setActiveFile(project.file);
+    sendMessage(project.query);
+  };
+
+  const clock = useMemo(() => new Date().getFullYear(), []);
+
   return (
-    <div className="flex flex-col h-screen bg-gray-50 font-sans">
-      <header className="bg-slate-900 text-white p-5 shadow-md text-center flex flex-col items-center">
-        <h1 className="text-2xl font-bold tracking-wide">Om Prakash Chaubey</h1>
-        <p className="text-sm text-blue-300 mt-1">Interactive AI Portfolio</p>
+    <div className="ide">
+      <header className="titlebar">
+        <div className="dots"><i /><i /><i /></div>
+        <span className="title">om-portfolio — Om Prakash Chaubey</span>
+        <span className="status"><span className="pulse" /> online</span>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 w-full max-w-4xl mx-auto flex flex-col gap-4">
-        {messages.map((msg, index) => (
-          <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-4 rounded-2xl shadow-sm text-base leading-relaxed ${msg.role === 'user'
-              ? 'bg-blue-600 text-white rounded-br-sm whitespace-pre-wrap'
-              : 'bg-white text-gray-800 border border-gray-200 rounded-bl-sm markdown-body'
-              }`}>
-              {msg.role === 'user' ? (
-                msg.text
-              ) : (
-                <ReactMarkdown>{msg.text}</ReactMarkdown>
-              )}
-            </div>
+      <div className="panes">
+        <aside className="explorer">
+          <div className="pane-title">EXPLORER</div>
+          <div className="tree-root">▾ PROJECTS</div>
+          <div className="file-list">
+            {PROJECTS.map((p) => (
+              <ProjectBlock
+                key={p.file}
+                project={p}
+                active={activeFile === p.file}
+                onSelect={onSelectProject}
+              />
+            ))}
           </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </main>
+        </aside>
 
-      <footer className="bg-white p-4 border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-        <form onSubmit={sendMessage} className="max-w-4xl mx-auto flex gap-3 relative">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about my anomaly detection project, skills, or experience..."
-            className="flex-1 p-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="bg-blue-600 text-white px-8 py-4 rounded-xl font-semibold hover:bg-blue-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed shadow-sm"
+        <section className="terminal" onClick={() => inputRef.current?.focus()}>
+          <div className="pane-title">TERMINAL — bash</div>
+          <div className="term-body">
+            <AnimatePresence initial={false}>
+              {messages.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  className="line"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  {msg.role === 'user' ? (
+                    <>
+                      <span className="prompt">{PROMPT}</span>{' '}
+                      <span className="user-cmd">{msg.text}</span>
+                    </>
+                  ) : (
+                    <>
+                      <TypewriterText tokens={msg.tokens} streaming={msg.streaming} />
+                      {msg.error && <div className="log-error">{msg.error}</div>}
+                    </>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            <div ref={endRef} />
+          </div>
+
+          <form
+            className="term-input"
+            onSubmit={(e) => {
+              e.preventDefault();
+              sendMessage();
+            }}
           >
-            {isLoading ? '...' : 'Send'}
-          </button>
-        </form>
+            <span className="prompt">{PROMPT}</span>
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={isLoading}
+              placeholder="ask about the anomaly detection model..."
+              autoFocus
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </form>
+        </section>
+      </div>
+
+      <footer className="statusbar">
+        <span>main*</span>
+        <span>LangChain RAG · Groq</span>
+        <span>© {clock}</span>
       </footer>
     </div>
   );
